@@ -91,9 +91,17 @@ def _fallback_answer(query: str, chunks: list[dict]) -> str:
 def _openai_remote_enabled() -> bool:
     return os.getenv("OPENAI_ENABLE_REMOTE", "").lower() in {"1", "true", "yes"}
 
-def generate_with_citation(query: str, top_k: int = TOP_K) -> dict:
+def generate_with_citation(
+    query: str,
+    top_k: int = TOP_K,
+    use_reranking: bool = True,
+    score_threshold: float | None = None,
+) -> dict:
     """Run retrieval, context ordering, and cited generation."""
-    chunks = retrieve(query, top_k=top_k)
+    retrieve_kwargs = {"top_k": top_k, "use_reranking": use_reranking}
+    if score_threshold is not None:
+        retrieve_kwargs["score_threshold"] = score_threshold
+    chunks = retrieve(query, **retrieve_kwargs)
     reordered = reorder_for_llm(chunks)
     context = format_context(reordered)
 
