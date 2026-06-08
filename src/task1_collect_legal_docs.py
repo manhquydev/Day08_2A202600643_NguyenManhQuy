@@ -20,6 +20,8 @@ Gợi ý văn bản:
 
 from pathlib import Path
 
+import requests
+
 DATA_DIR = Path(__file__).parent.parent / "data" / "landing" / "legal"
 
 
@@ -29,19 +31,43 @@ def setup_directory():
     print(f"✓ Thư mục đã sẵn sàng: {DATA_DIR}")
 
 
-# TODO: Tải file PDF/DOCX về DATA_DIR
-# Có thể tải thủ công hoặc viết script download nếu có direct link.
-#
-# Ví dụ nếu có direct link:
-#
-# import requests
-#
-# def download_file(url: str, filename: str):
-#     response = requests.get(url)
-#     filepath = DATA_DIR / filename
-#     filepath.write_bytes(response.content)
-#     print(f"✓ Đã tải: {filepath}")
+def list_files() -> list:
+    """Liệt kê và log các file PDF/DOCX trong DATA_DIR."""
+    extensions = {".pdf", ".docx", ".doc"}
+    files = [f for f in DATA_DIR.iterdir()
+             if f.is_file() and f.suffix.lower() in extensions]
+    for f in files:
+        print(f"  ✓ {f.name} ({f.stat().st_size // 1024} KB)")
+    return files
+
+
+def verify_legal_docs() -> dict:
+    """Kiểm tra ≥3 file pháp luật hợp lệ (>1KB)."""
+    setup_directory()
+    files = list_files()
+    valid = [f for f in files if f.stat().st_size > 1024]
+    ok = len(valid) >= 3
+    status = "✓ ĐẠT" if ok else "✗ CHƯA ĐẠT"
+    print(f"{status}: {len(valid)}/3 văn bản pháp luật hợp lệ")
+    return {"ok": ok, "count": len(valid), "files": [f.name for f in valid]}
+
+
+def download_file(url: str, filename: str) -> Path:
+    """Tải file từ URL về DATA_DIR."""
+    setup_directory()
+    filepath = DATA_DIR / filename
+    if filepath.exists():
+        print(f"  ↩ Đã tồn tại: {filepath.name}")
+        return filepath
+    response = requests.get(url, timeout=60)
+    response.raise_for_status()
+    filepath.write_bytes(response.content)
+    print(f"  ✓ Đã tải: {filepath.name} ({len(response.content) // 1024} KB)")
+    return filepath
 
 
 if __name__ == "__main__":
     setup_directory()
+    print("\n📁 Danh sách văn bản pháp luật:")
+    result = verify_legal_docs()
+    print(f"\nKết quả: {result}")
