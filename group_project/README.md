@@ -1,6 +1,6 @@
-# Group Project — Requirement 1 (RAG Chatbot bằng Streamlit)
+# Group Project — Requirement 1 + 2
 
-Triển khai này hoàn thành **Yêu cầu 1**:
+Triển khai này hoàn thành **Yêu cầu 1** RAG Chatbot:
 - Streamlit chat UI
 - Câu trả lời có citation
 - Cho phép chọn splitter / embedding model / reranking
@@ -8,12 +8,21 @@ Triển khai này hoàn thành **Yêu cầu 1**:
 - Hỗ trợ follow-up questions với conversation memory
 - Hiển thị source documents được dùng khi trả lời
 
+Triển khai này cũng hoàn thành **Yêu cầu 2** RAG Evaluation Pipeline:
+- 19 golden Q&A trong `evaluation/golden_dataset.json`
+- DeepEval là primary framework; offline fallback ghi rõ `local_heuristic_fallback`
+- 4 metrics: faithfulness, answer relevance, context recall, context precision
+- A/B comparison: `hybrid_rerank` vs `hybrid_no_rerank`
+- Báo cáo sinh ra tại `evaluation/results.md`
+
 ----
 
 ## Files chính
 
 - `group_project/app.py`: Streamlit app
 - `group_project/rag_chatbot.py`: backend RAG configurable
+- `group_project/evaluation/eval_pipeline.py`: evaluation runner
+- `group_project/evaluation/results.md`: report metrics và A/B comparison
 
 ---
 
@@ -33,12 +42,22 @@ Nếu chỉ dùng `local_numpy`, bạn chỉ cần `OPENAI_API_KEY`.
 
 ## Chạy ứng dụng
 
-Từ thư mục `Lab/Day08-lab-assignment`:
+Từ thư mục repo:
 
 ```bash
 pip install -r requirements.txt
 streamlit run group_project/app.py
 ```
+
+---
+
+## Chạy evaluation
+
+```bash
+python group_project/evaluation/eval_pipeline.py
+```
+
+Ghi chú: nếu chưa bật `DEEPEVAL_ENABLE_REMOTE=1`, report dùng backend `local_heuristic_fallback` để chạy offline ổn định.
 
 ---
 
