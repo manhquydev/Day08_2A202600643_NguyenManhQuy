@@ -7,6 +7,14 @@ import re
 import unicodedata
 from pathlib import Path
 
+try:
+    from sentence_transformers import SentenceTransformer as _SentenceTransformer
+    _SBERT_MODEL = _SentenceTransformer("all-MiniLM-L6-v2")
+    _SBERT_AVAILABLE = True
+except Exception:
+    _SBERT_MODEL = None
+    _SBERT_AVAILABLE = False
+
 STANDARDIZED_DIR = Path(__file__).parent.parent / "data" / "standardized"
 INDEX_DIR = Path(__file__).parent.parent / "data" / "index"
 INDEX_PATH = INDEX_DIR / "local_chunks.json"
@@ -17,10 +25,10 @@ CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
 CHUNKING_METHOD = "recursive"  # "recursive" | "markdown_header" | "semantic"
 
-# Local hashed token embeddings keep the classroom harness deterministic without
-# requiring model downloads; this can be swapped for BAAI/bge-m3 in production.
-EMBEDDING_MODEL = "local-hashed-token-embedding-v1"
-EMBEDDING_DIM = 256
+# sentence-transformers/all-MiniLM-L6-v2: multilingual-friendly, 384-dim, fast.
+# Falls back to hash-projection when sentence-transformers is unavailable.
+EMBEDDING_MODEL = "all-MiniLM-L6-v2" if _SBERT_AVAILABLE else "local-hashed-token-embedding-v1"
+EMBEDDING_DIM = 384 if _SBERT_AVAILABLE else 256
 
 VECTOR_STORE = "local-json"  # "local-json" | "weaviate" | "chromadb" | "faiss"
 
@@ -126,6 +134,10 @@ def tokenize(text: str) -> list[str]:
 
 
 def text_embedding(text: str, dim: int = EMBEDDING_DIM) -> list[float]:
+    if _SBERT_AVAILABLE and _SBERT_MODEL is not None:
+        vec = _SBERT_MODEL.encode(text, normalize_embeddings=True)
+        return vec.tolist()
+    # Fallback: hash-projection (used only when sentence-transformers unavailable)
     vector = [0.0] * dim
     for token in tokenize(text):
         digest = hashlib.blake2b(token.encode("utf-8"), digest_size=8).digest()
