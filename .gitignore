@@ -4,3 +4,4 @@ __pycache__/
 .pytest_cache/
 plans/
 docs/
+group_project/.local_vectorstore/
