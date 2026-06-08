@@ -9,10 +9,12 @@ Yêu cầu:
     - Phải tương thích với embedding model và vector store ở Task 4
 """
 
+import json
 from functools import lru_cache
 
 try:
     from .task4_chunking_indexing import (
+        INDEX_PATH,
         chunk_documents,
         cosine_similarity,
         embed_chunks,
@@ -21,6 +23,7 @@ try:
     )
 except ImportError:
     from task4_chunking_indexing import (
+        INDEX_PATH,
         chunk_documents,
         cosine_similarity,
         embed_chunks,
@@ -31,6 +34,9 @@ except ImportError:
 
 @lru_cache(maxsize=1)
 def _embedded_corpus() -> tuple[dict, ...]:
+    # Load from persisted index when available to avoid re-embedding on every import.
+    if INDEX_PATH.exists():
+        return tuple(json.loads(INDEX_PATH.read_text(encoding="utf-8")))
     docs = load_documents()
     chunks = chunk_documents(docs)
     return tuple(embed_chunks(chunks))
