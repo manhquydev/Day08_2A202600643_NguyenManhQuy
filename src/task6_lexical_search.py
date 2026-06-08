@@ -15,10 +15,67 @@ BM25 hoạt động thế nào:
     - k1=1.5 (term saturation), b=0.75 (length normalization)
 """
 
-from pathlib import Path
+import math
+import unicodedata
+from collections import Counter
+from functools import lru_cache
 
-# TODO: Load corpus từ data/standardized/ hoặc từ vector store
-CORPUS: list[dict] = []  # List of {'content': str, 'metadata': dict}
+try:
+    from .task4_chunking_indexing import chunk_documents, load_documents, tokenize
+except ImportError:
+    from task4_chunking_indexing import chunk_documents, load_documents, tokenize
+
+CORPUS: list[dict] = []
+
+
+def _normalize_token(token: str) -> str:
+    decomposed = unicodedata.normalize("NFD", token.lower())
+    return "".join(ch for ch in decomposed if unicodedata.category(ch) != "Mn")
+
+
+def _tokens(text: str) -> list[str]:
+    return [_normalize_token(token) for token in tokenize(text)]
+
+
+class LocalBM25:
+    def __init__(self, tokenized_corpus: list[list[str]], k1: float = 1.5, b: float = 0.75):
+        self.tokenized_corpus = tokenized_corpus
+        self.k1 = k1
+        self.b = b
+        self.avgdl = (
+            sum(len(doc) for doc in tokenized_corpus) / len(tokenized_corpus)
+            if tokenized_corpus
+            else 0.0
+        )
+        document_frequency: Counter[str] = Counter()
+        for doc in tokenized_corpus:
+            document_frequency.update(set(doc))
+        doc_count = len(tokenized_corpus)
+        self.idf = {
+            term: max(0.0, math.log((doc_count - freq + 0.5) / (freq + 0.5) + 1.0))
+            for term, freq in document_frequency.items()
+        }
+
+    def get_scores(self, query_tokens: list[str]) -> list[float]:
+        scores = []
+        for doc in self.tokenized_corpus:
+            frequencies = Counter(doc)
+            doc_len = len(doc) or 1
+            score = 0.0
+            for term in query_tokens:
+                tf = frequencies.get(term, 0)
+                if not tf:
+                    continue
+                denominator = tf + self.k1 * (1 - self.b + self.b * doc_len / (self.avgdl or 1))
+                score += self.idf.get(term, 0.0) * (tf * (self.k1 + 1)) / denominator
+            scores.append(score)
+        return scores
+
+
+@lru_cache(maxsize=1)
+def _corpus() -> tuple[dict, ...]:
+    chunks = chunk_documents(load_documents())
+    return tuple(chunks)
 
 
 def build_bm25_index(corpus: list[dict]):
@@ -28,15 +85,8 @@ def build_bm25_index(corpus: list[dict]):
     Args:
         corpus: List of {'content': str, 'metadata': dict}
     """
-    # TODO: Implement BM25 index
-    #
-    # from rank_bm25 import BM25Okapi
-    #
-    # # Tokenize - cho tiếng Việt nên dùng underthesea hoặc đơn giản split()
-    # tokenized_corpus = [doc["content"].lower().split() for doc in corpus]
-    # bm25 = BM25Okapi(tokenized_corpus)
-    # return bm25
-    raise NotImplementedError("Implement build_bm25_index")
+    tokenized_corpus = [_tokens(doc.get("content", "")) for doc in corpus]
+    return LocalBM25(tokenized_corpus)
 
 
 def lexical_search(query: str, top_k: int = 10) -> list[dict]:
@@ -55,25 +105,31 @@ def lexical_search(query: str, top_k: int = 10) -> list[dict]:
         }
         Sorted by score descending.
     """
-    # TODO: Implement lexical search
-    #
-    # tokenized_query = query.lower().split()
-    # scores = bm25.get_scores(tokenized_query)
-    #
-    # # Get top_k indices
-    # import numpy as np
-    # top_indices = np.argsort(scores)[::-1][:top_k]
-    #
-    # results = []
-    # for idx in top_indices:
-    #     if scores[idx] > 0:
-    #         results.append({
-    #             "content": CORPUS[idx]["content"],
-    #             "score": float(scores[idx]),
-    #             "metadata": CORPUS[idx]["metadata"]
-    #         })
-    # return results
-    raise NotImplementedError("Implement lexical_search")
+    if top_k <= 0 or not query.strip():
+        return []
+
+    corpus = list(_corpus())
+    if not corpus:
+        return []
+
+    bm25 = build_bm25_index(corpus)
+    scores = bm25.get_scores(_tokens(query))
+    ranked_indices = sorted(range(len(scores)), key=lambda idx: scores[idx], reverse=True)
+
+    results = []
+    for idx in ranked_indices:
+        if scores[idx] <= 0:
+            continue
+        results.append(
+            {
+                "content": corpus[idx]["content"],
+                "score": float(scores[idx]),
+                "metadata": corpus[idx].get("metadata", {}),
+            }
+        )
+        if len(results) >= top_k:
+            break
+    return results
 
 
 if __name__ == "__main__":

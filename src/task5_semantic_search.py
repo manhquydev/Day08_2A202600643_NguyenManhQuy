@@ -9,6 +9,32 @@ Yêu cầu:
     - Phải tương thích với embedding model và vector store ở Task 4
 """
 
+from functools import lru_cache
+
+try:
+    from .task4_chunking_indexing import (
+        chunk_documents,
+        cosine_similarity,
+        embed_chunks,
+        load_documents,
+        text_embedding,
+    )
+except ImportError:
+    from task4_chunking_indexing import (
+        chunk_documents,
+        cosine_similarity,
+        embed_chunks,
+        load_documents,
+        text_embedding,
+    )
+
+
+@lru_cache(maxsize=1)
+def _embedded_corpus() -> tuple[dict, ...]:
+    docs = load_documents()
+    chunks = chunk_documents(docs)
+    return tuple(embed_chunks(chunks))
+
 
 def semantic_search(query: str, top_k: int = 10) -> list[dict]:
     """
@@ -26,37 +52,25 @@ def semantic_search(query: str, top_k: int = 10) -> list[dict]:
         }
         Sorted by score descending.
     """
-    # TODO: Implement semantic search
-    #
-    # Bước 1: Embed query bằng cùng model ở Task 4
-    # Bước 2: Query vector store (cosine similarity)
-    # Bước 3: Return top_k results
-    #
-    # Ví dụ với Weaviate:
-    # import weaviate
-    # from sentence_transformers import SentenceTransformer
-    #
-    # model = SentenceTransformer("BAAI/bge-m3")
-    # query_embedding = model.encode(query).tolist()
-    #
-    # client = weaviate.connect_to_local()
-    # collection = client.collections.get("DrugLawDocs")
-    #
-    # results = collection.query.near_vector(
-    #     near_vector=query_embedding,
-    #     limit=top_k,
-    #     return_metadata=MetadataQuery(distance=True)
-    # )
-    #
-    # return [
-    #     {
-    #         "content": obj.properties["content"],
-    #         "score": 1 - obj.metadata.distance,  # distance → similarity
-    #         "metadata": {"source": obj.properties["source"], ...}
-    #     }
-    #     for obj in results.objects
-    # ]
-    raise NotImplementedError("Implement semantic_search")
+    if top_k <= 0 or not query.strip():
+        return []
+
+    query_embedding = text_embedding(query)
+    results = []
+    for chunk in _embedded_corpus():
+        score = cosine_similarity(query_embedding, chunk.get("embedding", []))
+        if score <= 0:
+            continue
+        results.append(
+            {
+                "content": chunk["content"],
+                "score": float(score),
+                "metadata": chunk.get("metadata", {}),
+            }
+        )
+
+    results.sort(key=lambda item: item["score"], reverse=True)
+    return results[:top_k]
 
 
 if __name__ == "__main__":
