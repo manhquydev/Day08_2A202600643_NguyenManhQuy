@@ -39,64 +39,12 @@ except ImportError:
 
 STANDARDIZED_DIR = Path(__file__).parent.parent / "data" / "standardized"
 
-DOMAIN_TERMS = {
-    "ma",
-    "tuy",
-    "ma túy",
-    "ma tuý",
-    "chat",
-    "cam",
-    "nghien",
-    "cai",
-    "tang",
-    "tru",
-    "van",
-    "chuyen",
-    "mua",
-    "ban",
-    "toi",
-    "phat",
-    "luat",
-    "hinh",
-    "nghe",
-    "si",
-    "ca",
-    "si",
-    "dien",
-    "vien",
-    "long",
-    "nhat",
-    "son",
-    "ngoc",
-    "minh",
-    "miu",
-    "le",
-}
-
-
 def _remote_enabled() -> bool:
     return os.getenv("PAGEINDEX_ENABLE_REMOTE", "").lower() in {"1", "true", "yes"}
 
 
 def _api_key() -> str:
     return os.getenv("PAGEINDEX_API_KEY", "")
-
-
-def _folded_tokens(text: str) -> set[str]:
-    from unicodedata import category, normalize
-
-    import re
-
-    folded = normalize("NFD", text.lower())
-    folded = "".join(ch for ch in folded if category(ch) != "Mn")
-    return set(re.findall(r"[\w]+", folded))
-
-
-def _domain_relevant(query: str) -> bool:
-    tokens = _folded_tokens(query)
-    if not tokens:
-        return False
-    return bool(tokens & DOMAIN_TERMS)
 
 
 def upload_documents():
@@ -142,9 +90,6 @@ def pageindex_search(query: str, top_k: int = 5) -> list[dict]:
         }
     """
     if top_k <= 0 or not query.strip():
-        return []
-
-    if not _domain_relevant(query):
         return []
 
     api_key = _api_key()
